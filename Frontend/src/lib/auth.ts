@@ -69,7 +69,7 @@ export async function registerUser(input: {
   email: string; 
   password: string; 
   location?: string 
-}): Promise<{ ok: true; user: User } | { ok: false; error: string }> {
+}): Promise<{ ok: true; user: User; needsEmailConfirmation?: boolean } | { ok: false; error: string }> {
   try {
     const { data, error } = await authService.signUp(
       input.email.trim().toLowerCase(),
@@ -85,6 +85,9 @@ export async function registerUser(input: {
       return { ok: false, error: 'Signup failed - no user returned' };
     }
 
+    // Check if email confirmation is required
+    const needsEmailConfirmation = !data.session;
+
     const userProfile: User = {
       id: data.user.id,
       email: data.user.email || input.email,
@@ -92,12 +95,14 @@ export async function registerUser(input: {
       location: input.location?.trim(),
     };
 
-    // Cache the user
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userProfile));
-    localStorage.setItem(AUTH_FLAG_KEY, "1");
-    notifyAuthChange();
+    // Only cache the user if they have a session (email confirmed or confirmation disabled)
+    if (data.session) {
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userProfile));
+      localStorage.setItem(AUTH_FLAG_KEY, "1");
+      notifyAuthChange();
+    }
 
-    return { ok: true, user: userProfile };
+    return { ok: true, user: userProfile, needsEmailConfirmation };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'An error occurred';
     return { ok: false, error: message };

@@ -23,7 +23,15 @@ const Login: React.FC = () => {
       const res = await loginUser(email.trim().toLowerCase(), password);
       
       if (!res.ok) {
-        toast.error("Login failed", { description: res.error });
+        // Check if error is about email confirmation
+        if (res.error.toLowerCase().includes('email') && res.error.toLowerCase().includes('confirm')) {
+          toast.error("Email not confirmed", { 
+            description: "Please check your email and click the confirmation link before logging in.",
+            duration: 6000
+          });
+        } else {
+          toast.error("Login failed", { description: res.error });
+        }
         setLoading(false);
         return;
       }

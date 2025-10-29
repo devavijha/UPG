@@ -29,10 +29,21 @@ const Signup: React.FC = () => {
         return;
       }
       
-      toast.success("Account created", { description: "Welcome to ReCraft!" });
-      navigate("/");
+      // Check if email confirmation is required
+      if (res.needsEmailConfirmation) {
+        toast.success("Account created!", { 
+          description: "Please check your email to confirm your account before logging in.",
+          duration: 6000
+        });
+        // Redirect to login page after 2 seconds
+        setTimeout(() => navigate("/login"), 2000);
+      } else {
+        toast.success("Account created", { description: "Welcome to ReCraft!" });
+        navigate("/");
+      }
     } catch {
       toast.error("Signup failed", { description: "An unexpected error occurred" });
+    } finally {
       setLoading(false);
     }
   };
