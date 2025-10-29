@@ -290,7 +290,7 @@ export const orderService = {
   // Create order
   async createOrder(orderData: {
     total_amount: number
-    shipping_address: string
+    shipping_address: object | string
     items: Array<{ product_id: string; quantity: number; price: number }>
   }) {
     const { data: { user } } = await supabase.auth.getUser()

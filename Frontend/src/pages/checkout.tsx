@@ -57,7 +57,18 @@ const CheckoutPage: React.FC = () => {
     
     try {
       // Prepare shipping address
-      const shippingAddress = `${form.fullName}\n${form.phone}\n${form.address1}${form.address2 ? '\n' + form.address2 : ''}\n${form.city}, ${form.state} - ${form.pincode}${form.email ? '\nEmail: ' + form.email : ''}${form.notes ? '\nNotes: ' + form.notes : ''}`;
+      // Create shipping address as JSON object (Supabase expects JSONB)
+      const shippingAddress = {
+        fullName: form.fullName,
+        phone: form.phone,
+        address1: form.address1,
+        address2: form.address2 || '',
+        city: form.city,
+        state: form.state,
+        pincode: form.pincode,
+        email: form.email || '',
+        notes: form.notes || ''
+      };
       
       // Prepare order items - handle both number and string IDs
       const items = cart.map(item => {
