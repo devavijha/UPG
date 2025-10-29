@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Separator } from "../components/ui/separator";
 import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import {
   getCart, setCart, updateQty, removeFromCart,
   cartSubtotal, formatRupees, type CartItem
@@ -19,11 +20,17 @@ const CartPage: React.FC = () => {
   const [subtotal, setSubtotal] = React.useState<number>(0);
   const [coupon, setCoupon] = React.useState<string>("");
   const [discount, setDiscount] = React.useState<number>(0); // currency value
+  const [hasOldProducts, setHasOldProducts] = React.useState<boolean>(false);
   const navigate = useNavigate();
 
   const recalc = React.useCallback(() => {
-    setItems(getCart());
+    const cart = getCart();
+    setItems(cart);
     setSubtotal(cartSubtotal());
+    
+    // Check for old products with numeric IDs
+    const hasOld = cart.some(item => typeof item.product.id === 'number');
+    setHasOldProducts(hasOld);
   }, []);
 
   React.useEffect(() => {
@@ -33,27 +40,27 @@ const CartPage: React.FC = () => {
     return () => window.removeEventListener("storage", onStorage);
   }, [recalc]);
 
-  const handleQtyChange = (id: number, v: string) => {
+  const handleQtyChange = (id: number | string, v: string) => {
     const q = parseInt(v || "1", 10);
     updateQty(id, isNaN(q) ? 1 : q);
     recalc();
   };
 
-  const dec = (id: number) => {
+  const dec = (id: number | string) => {
     const it = getCart().find(c => c.product.id === id);
     if (!it) return;
     updateQty(id, Math.max(1, it.qty - 1));
     recalc();
   };
 
-  const inc = (id: number) => {
+  const inc = (id: number | string) => {
     const it = getCart().find(c => c.product.id === id);
     if (!it) return;
     updateQty(id, Math.min(it.qty + 1, it.product.stock));
     recalc();
   };
 
-  const remove = (id: number) => { removeFromCart(id); recalc(); };
+  const remove = (id: number | string) => { removeFromCart(id); recalc(); };
   const clearAll = () => { setCart([]); setDiscount(0); setCoupon(""); recalc(); };
 
   const shipping = subtotal - discount >= FREE_SHIPPING_THRESHOLD || subtotal === 0 ? 0 : FLAT_SHIP;
@@ -76,6 +83,34 @@ const CartPage: React.FC = () => {
       <Header showActions />
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Warning for old products */}
+        {hasOldProducts && (
+          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <div className="text-yellow-600 text-xl">⚠️</div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-yellow-900">Old Products in Cart</h3>
+                <p className="text-sm text-yellow-800 mt-1">
+                  Your cart contains products from the old system that cannot be ordered. 
+                  Please clear your cart and add products from the Buy page.
+                </p>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="mt-2 border-yellow-600 text-yellow-900 hover:bg-yellow-100"
+                  onClick={() => {
+                    setCart([]);
+                    recalc();
+                    toast.success("Cart cleared", { description: "Please add products from the Buy page" });
+                  }}
+                >
+                  Clear Cart Now
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-emerald-900">Your Cart</h1>
           <div className="flex gap-2">

@@ -70,21 +70,54 @@ const CheckoutPage: React.FC = () => {
         notes: form.notes || ''
       };
       
-      // Prepare order items - handle both number and string IDs
-      const items = cart.map(item => {
-        const productId = typeof item.product.id === 'number' 
-          ? item.product.id.toString() 
-          : item.product.id;
-        const priceNum = typeof item.product.price === 'string'
-          ? parseFloat(item.product.price.replace(/[^\d.]/g, ''))
-          : item.product.price;
+      // UUID validation regex
+      const isUUID = (id: string | number): boolean => {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return typeof id === 'string' && uuidRegex.test(id);
+      };
+      
+      // Prepare order items - validate UUIDs
+      const items = cart
+        .filter(item => {
+          const id = typeof item.product.id === 'number' 
+            ? item.product.id.toString() 
+            : item.product.id;
           
-        return {
-          product_id: productId,
-          quantity: item.qty,
-          price: priceNum
-        };
-      });
+          if (!isUUID(id)) {
+            console.warn('Skipping item with invalid UUID:', item.product.name, 'ID:', id);
+            return false;
+          }
+          return true;
+        })
+        .map(item => {
+          const productId = typeof item.product.id === 'number' 
+            ? item.product.id.toString() 
+            : item.product.id;
+          const priceNum = typeof item.product.price === 'string'
+            ? parseFloat(item.product.price.replace(/[^\d.]/g, ''))
+            : item.product.price;
+            
+          return {
+            product_id: productId,
+            quantity: item.qty,
+            price: priceNum
+          };
+        });
+      
+      // Check if we have valid items
+      if (items.length === 0) {
+        toast.error('No valid items in cart', {
+          description: 'Cart contains old products. Please clear cart and add products from the Buy page.'
+        });
+        setPlacing(false);
+        return;
+      }
+      
+      if (items.length < cart.length) {
+        toast.warning('Some items were skipped', {
+          description: `${cart.length - items.length} old products were removed from the order.`
+        });
+      }
       
       // Create order in Supabase
       const { error } = await orderService.createOrder({

@@ -1,6 +1,6 @@
 // src/lib/shop.ts
 export type Product = {
-  id: number;
+  id: number | string; // Support both numeric (old) and UUID (Supabase)
   name: string;
   image: string;
   price: string; // "₹2,500"
@@ -59,7 +59,7 @@ export function addToCart(product: Product, qty = 1) {
   setCart(cart);
 }
 
-export function updateQty(productId: number, qty: number) {
+export function updateQty(productId: number | string, qty: number) {
   const cart = getCart();
   const i = cart.findIndex((c) => c.product.id === productId);
   if (i >= 0) {
@@ -68,7 +68,7 @@ export function updateQty(productId: number, qty: number) {
   }
 }
 
-export function removeFromCart(productId: number) {
+export function removeFromCart(productId: number | string) {
   setCart(getCart().filter((c) => c.product.id !== productId));
 }
 
@@ -94,7 +94,7 @@ export function setWishlist(list: Product[]) {
   window.dispatchEvent(new StorageEvent("storage", { key: WL_KEY }));
 }
 
-export function isWishlisted(id: number) {
+export function isWishlisted(id: number | string) {
   return getWishlist().some((p) => p.id === id);
 }
 
@@ -105,6 +105,6 @@ export function addToWishlist(product: Product) {
   setWishlist(list);
 }
 
-export function removeFromWishlist(productId: number) {
+export function removeFromWishlist(productId: number | string) {
   setWishlist(getWishlist().filter((p) => p.id !== productId));
 }
