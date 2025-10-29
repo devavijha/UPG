@@ -32,6 +32,9 @@ import { addUserProduct, updateUserProductByListingId } from "@/lib/products";
 // Listings helpers
 import { type Listing, getListing, upsertListing } from "@/lib/listings";
 
+// Supabase services
+import { productService } from "@/lib/supabase-services";
+
 /* ------------------------------ Form schema ------------------------------ */
 const MAX_IMAGE_SIZE = 3 * 1024 * 1024; // 3MB
 const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -139,10 +142,30 @@ const SellNew: React.FC = () => {
 
   const onSubmit = async (values: CreateOutput | EditOutput) => {
     try {
-      // 1) Upsert listing for My Listings
+      // Convert image to data URL
+      const file = (values as CreateOutput).productPhoto?.[0];
+      const dataUrl = file ? await fileToDataURL(file) : "";
+
+      // Create product in Supabase
+      const productData = {
+        title: values.productName,
+        description: (values as any).description || "",
+        price: Number(values.price || 0),
+        category: values.category || "Other",
+        condition: "Good", // Default condition
+        image_url: dataUrl, // For now using data URL, ideally upload to Supabase Storage
+      };
+
+      const { data, error } = await productService.createProduct(productData);
+
+      if (error) {
+        throw new Error(error.message || "Failed to create product");
+      }
+
+      // Also save to localStorage for backward compatibility (My Listings page)
       const nowIso = new Date().toISOString();
       const listing: Listing = {
-        id: editId ?? (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+        id: data?.id || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
         title: values.productName,
         price: Number(values.price || 0),
         stock: Number(values.quantity || "1"),
@@ -152,7 +175,7 @@ const SellNew: React.FC = () => {
       };
       upsertListing(listing);
 
-      // 2) Sync Buy page product
+      // 2) Sync Buy page product (localStorage for backward compatibility)
       if (isEditing) {
         // Update existing Buy card text values
         updateUserProductByListingId(listing.id, {
@@ -166,11 +189,8 @@ const SellNew: React.FC = () => {
         });
       } else {
         // Creating: add a new Buy card with data-URL image
-        const file = (values as CreateOutput).productPhoto?.[0];
-        const dataUrl = file ? await fileToDataURL(file) : "";
-
         const newProduct: Product = {
-          id: Date.now(),
+          id: data?.id || Date.now(),
           name: values.productName,
           image: dataUrl,
           price: new Intl.NumberFormat("en-IN", {
@@ -191,13 +211,14 @@ const SellNew: React.FC = () => {
       toast.success(isEditing ? "Listing updated" : "Product listed!", {
         description: isEditing
           ? "Your changes are saved in My Listings and reflected on Buy."
-          : "Your creation is now visible in Buy Products and My Listings.",
+          : "Your product is now saved to Supabase and visible in Buy Products!",
       });
 
       navigate("/my-listings");
-    } catch {
+    } catch (error) {
+      console.error("Failed to save product:", error);
       toast.error("Save failed", {
-        description: "We couldn’t save your listing. Please try again.",
+        description: error instanceof Error ? error.message : "We couldn't save your listing. Please try again.",
       });
     }
   };

@@ -26,6 +26,10 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
+
+// Supabase services
+import { donationService } from "@/lib/supabase-services";
 
 // Illustration
 import wasteHero from "@/assets/waste-hero.png";
@@ -172,37 +176,65 @@ const WasteSubmitPage: React.FC = () => {
     }
 
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 900));
 
-    const id = "DON-" + Math.random().toString(36).slice(2, 8).toUpperCase();
-    setSubmittedId(id);
+    try {
+      // Create donation in Supabase
+      const donationData = {
+        item_name: values.materialType,
+        description: values.notes || "",
+        category: values.materialType, // Using material type as category
+        quantity: parseInt(values.quantity) || 1,
+        condition: values.condition,
+        pickup_address: values.pickup && values.address ? values.address : "",
+        pincode: values.pickup && values.pincode ? values.pincode : "",
+      };
 
-    const payload = {
-      id,
-      ...values,
-      pickup_serviceable: values.pickup ? pinStatus === "ok" : false,
-      region: pinRegion,
-    };
-    // await fetch("/api/donations", { method: "POST", body: JSON.stringify(payload) })
-    localStorage.setItem("last_waste_donation", JSON.stringify(payload));
+      const { data, error } = await donationService.createDonation(donationData);
 
-    const keepPickup = values.pickup;
-    form.reset({
-      materialType: "",
-      quantity: "",
-      condition: undefined as unknown as DonationFormInput["condition"],
-      images: [],
-      notes: "",
-      pickup: keepPickup,
-      address: "",
-      pincode: "",
-      consent: false,
-    });
+      if (error) {
+        throw new Error(error.message || "Failed to submit donation");
+      }
 
-    setPinStatus("idle");
-    setPinRegion(null);
-    setPinMessage("");
-    setSubmitting(false);
+      const id = data?.id || "DON-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+      setSubmittedId(id);
+
+      // Also save to localStorage for backward compatibility
+      const payload = {
+        id,
+        ...values,
+        pickup_serviceable: values.pickup ? pinStatus === "ok" : false,
+        region: pinRegion,
+      };
+      localStorage.setItem("last_waste_donation", JSON.stringify(payload));
+
+      const keepPickup = values.pickup;
+      form.reset({
+        materialType: "",
+        quantity: "",
+        condition: undefined as unknown as DonationFormInput["condition"],
+        images: [],
+        notes: "",
+        pickup: keepPickup,
+        address: "",
+        pincode: "",
+        consent: false,
+      });
+
+      setPinStatus("idle");
+      setPinRegion(null);
+      setPinMessage("");
+
+      toast.success("Donation submitted!", {
+        description: "Your donation has been saved to Supabase successfully!",
+      });
+    } catch (error) {
+      console.error("Failed to submit donation:", error);
+      toast.error("Submission failed", {
+        description: error instanceof Error ? error.message : "We couldn't submit your donation. Please try again.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // Image helpers
