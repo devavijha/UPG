@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import recraftLogo from "@/assets/recraft-logo.png";
 import { User, Heart, ShoppingCart, Menu } from "lucide-react";
+import { logoutUser, isAuthed } from "@/lib/auth";
 
 type HeaderProps = {
   showActions?: boolean;
@@ -19,27 +20,25 @@ type HeaderProps = {
 
 const Header: React.FC<HeaderProps> = ({ showActions = true, className = "" }) => {
   const navigate = useNavigate();
-  const [isAuthed, setIsAuthed] = React.useState(
-    typeof window !== "undefined" && localStorage.getItem("rc_auth") === "1"
-  );
+  const [isAuthenticated, setIsAuthenticated] = React.useState(isAuthed());
   const [open, setOpen] = React.useState(false);
 
   React.useEffect(() => {
-    const sync = () => setIsAuthed(localStorage.getItem("rc_auth") === "1");
+    const sync = () => setIsAuthenticated(isAuthed());
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem("rc_auth");
-    setIsAuthed(false);
+  const handleLogout = async () => {
+    await logoutUser();
+    setIsAuthenticated(false);
     setOpen(false);
     navigate("/");
   };
 
   return (
     <header
-      className={`sticky top-0 z-50 border-b bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70 ${className}`}
+      className={`sticky top-0 z-50 border-b bg-white/80 backdrop-blur supports-backdrop-filter:bg-white/70 ${className}`}
     >
       <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand */}
@@ -70,7 +69,7 @@ const Header: React.FC<HeaderProps> = ({ showActions = true, className = "" }) =
 
         {/* Desktop right actions */}
         <div className="hidden items-center gap-4 sm:flex">
-          {!isAuthed && showActions ? (
+          {!isAuthenticated && showActions ? (
             <>
               <Button
                 variant="outline"
@@ -107,7 +106,7 @@ const Header: React.FC<HeaderProps> = ({ showActions = true, className = "" }) =
 
         {/* Mobile: right side icons + hamburger */}
         <div className="flex items-center gap-2 sm:hidden">
-          {isAuthed ? (
+          {isAuthenticated ? (
             <>
               <HeaderIcon ariaLabel="Wishlist" onClick={() => navigate("/wishlist")}>
                 <Heart />
@@ -138,11 +137,11 @@ const Header: React.FC<HeaderProps> = ({ showActions = true, className = "" }) =
                   <span className="text-lg font-semibold text-emerald-900">ReCraft</span>
                 </SheetTitle>
               </SheetHeader>
-              <MobileNav onItemClick={() => setOpen(false)} isAuthed={isAuthed} />
+              <MobileNav onItemClick={() => setOpen(false)} isAuthenticated={isAuthenticated} />
 
               {/* Auth section (mobile) */}
               <div className="mt-2 border-t p-4">
-                {!isAuthed && showActions ? (
+                {!isAuthenticated && showActions ? (
                   <div className="grid grid-cols-2 gap-3">
                     <Button
                       variant="outline"
@@ -232,10 +231,10 @@ const HeaderIcon = ({
 /** Mobile nav list inside the Sheet */
 const MobileNav = ({
   onItemClick,
-  isAuthed,
+  isAuthenticated,
 }: {
   onItemClick: () => void;
-  isAuthed: boolean;
+  isAuthenticated: boolean;
 }) => {
   const Item = ({ to, label }: { to: string; label: string }) => (
     <NavLink
@@ -261,7 +260,7 @@ const MobileNav = ({
       <Item to="/buy" label="Buy Products" />
       <Item to="/sell" label="Sell Products" />
       <Item to="/waste-donation" label="Waste Donation" />
-      {isAuthed ? (
+      {isAuthenticated ? (
         <>
           <Separator className="my-2" />
           <div className="px-4 pb-1 pt-2 text-xs font-medium uppercase text-emerald-900/60">

@@ -6,7 +6,7 @@ async function testConnection() {
   
   try {
     // Test 1: Check connection
-    const { data, error } = await supabase.from('profiles').select('count')
+    const { error } = await supabase.from('profiles').select('count')
     
     if (error && error.code === '42P01') {
       console.log('⚠️  Tables not found. You need to run the SQL schema.')

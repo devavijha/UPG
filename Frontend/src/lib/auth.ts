@@ -1,34 +1,52 @@
 // src/lib/auth.ts
+import { authService } from './supabase-services'
+
 export type User = {
   id: string;
   name: string;
   email: string;
-  password: string; // NOTE: demo only (plain text). Backend will replace with secure auth.
   location?: string;
-  avatarUrl?: string; // optional future field
+  avatarUrl?: string;
 };
 
-const USERS_KEY = "rc_users";
+// Storage keys for local cache
 const AUTH_FLAG_KEY = "rc_auth";
 const CURRENT_USER_KEY = "rc_user";
 
-function uid() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function readUsers(): User[] {
+// Get current user from Supabase or cache
+export async function getCurrentUser(): Promise<User | null> {
   try {
-    return JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
+    // Try to get from Supabase first
+    const { user, error } = await authService.getCurrentUser();
+    
+    if (error || !user) {
+      // Clear cache if Supabase says no user
+      localStorage.removeItem(CURRENT_USER_KEY);
+      localStorage.removeItem(AUTH_FLAG_KEY);
+      return null;
+    }
+
+    // Get profile data
+    const userProfile: User = {
+      id: user.id,
+      email: user.email || '',
+      name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+      location: user.user_metadata?.location,
+      avatarUrl: user.user_metadata?.avatar_url,
+    };
+
+    // Cache it
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userProfile));
+    localStorage.setItem(AUTH_FLAG_KEY, "1");
+
+    return userProfile;
   } catch {
-    return [];
+    return null;
   }
 }
 
-function writeUsers(list: User[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(list));
-}
-
-export function getCurrentUser(): User | null {
+// Get user from cache (synchronous)
+export function getCachedUser(): User | null {
   try {
     const raw = localStorage.getItem(CURRENT_USER_KEY);
     return raw ? (JSON.parse(raw) as User) : null;
@@ -37,84 +55,156 @@ export function getCurrentUser(): User | null {
   }
 }
 
-function setCurrentUser(u: User | null) {
-  if (u) {
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(u));
-  } else {
-    localStorage.removeItem(CURRENT_USER_KEY);
-  }
-  // notify header & others
-  window.dispatchEvent(new StorageEvent("storage", { key: CURRENT_USER_KEY }));
+function notifyAuthChange() {
+  window.dispatchEvent(new StorageEvent("storage", { key: AUTH_FLAG_KEY }));
 }
 
 export function isAuthed(): boolean {
   return localStorage.getItem(AUTH_FLAG_KEY) === "1";
 }
 
-function setAuthed(flag: boolean) {
-  if (flag) localStorage.setItem(AUTH_FLAG_KEY, "1");
-  else localStorage.removeItem(AUTH_FLAG_KEY);
-  window.dispatchEvent(new StorageEvent("storage", { key: AUTH_FLAG_KEY }));
+// Register new user with Supabase
+export async function registerUser(input: { 
+  name: string; 
+  email: string; 
+  password: string; 
+  location?: string 
+}): Promise<{ ok: true; user: User } | { ok: false; error: string }> {
+  try {
+    const { data, error } = await authService.signUp(
+      input.email.trim().toLowerCase(),
+      input.password,
+      input.name.trim()
+    );
+
+    if (error) {
+      return { ok: false, error: error.message || 'Signup failed' };
+    }
+
+    if (!data.user) {
+      return { ok: false, error: 'Signup failed - no user returned' };
+    }
+
+    const userProfile: User = {
+      id: data.user.id,
+      email: data.user.email || input.email,
+      name: input.name.trim(),
+      location: input.location?.trim(),
+    };
+
+    // Cache the user
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userProfile));
+    localStorage.setItem(AUTH_FLAG_KEY, "1");
+    notifyAuthChange();
+
+    return { ok: true, user: userProfile };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'An error occurred';
+    return { ok: false, error: message };
+  }
 }
 
-export function registerUser(input: { name: string; email: string; password: string; location?: string }): { ok: true; user: User } | { ok: false; error: string } {
-  const users = readUsers();
-  const exists = users.find(u => u.email.toLowerCase() === input.email.toLowerCase());
-  if (exists) return { ok: false, error: "Email already registered" };
+// Login user with Supabase
+export async function loginUser(
+  email: string, 
+  password: string
+): Promise<{ ok: true; user: User } | { ok: false; error: string }> {
+  try {
+    const { data, error } = await authService.signIn(
+      email.trim().toLowerCase(),
+      password
+    );
 
-  const user: User = {
-    id: uid(),
-    name: input.name.trim(),
-    email: input.email.trim().toLowerCase(),
-    password: input.password, // demo only
-    location: input.location?.trim(),
-  };
-  users.push(user);
-  writeUsers(users);
+    if (error) {
+      return { ok: false, error: error.message || 'Invalid email or password' };
+    }
 
-  setAuthed(true);
-  setCurrentUser(user);
-  return { ok: true, user };
+    if (!data.user) {
+      return { ok: false, error: 'Login failed - no user returned' };
+    }
+
+    const userProfile: User = {
+      id: data.user.id,
+      email: data.user.email || email,
+      name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
+      location: data.user.user_metadata?.location,
+      avatarUrl: data.user.user_metadata?.avatar_url,
+    };
+
+    // Cache the user
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userProfile));
+    localStorage.setItem(AUTH_FLAG_KEY, "1");
+    notifyAuthChange();
+
+    return { ok: true, user: userProfile };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'An error occurred';
+    return { ok: false, error: message };
+  }
 }
 
-export function loginUser(email: string, password: string): { ok: true; user: User } | { ok: false; error: string } {
-  const users = readUsers();
-  const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-  if (!user || user.password !== password) return { ok: false, error: "Invalid email or password" };
-  setAuthed(true);
-  setCurrentUser(user);
-  return { ok: true, user };
+// Logout user
+export async function logoutUser(): Promise<void> {
+  try {
+    await authService.signOut();
+  } catch (err) {
+    console.error('Logout error:', err);
+  } finally {
+    // Always clear local cache
+    localStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.removeItem(AUTH_FLAG_KEY);
+    notifyAuthChange();
+  }
 }
 
-export function logoutUser() {
-  setAuthed(false);
-  setCurrentUser(null);
+// Update current user profile
+export async function updateCurrentUser(patch: { 
+  name?: string; 
+  location?: string; 
+  avatarUrl?: string 
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const cachedUser = getCachedUser();
+  if (!cachedUser) return { ok: false, error: 'Not logged in' };
+
+  try {
+    // Update the cached user
+    const updated = { ...cachedUser, ...patch };
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(updated));
+    notifyAuthChange();
+
+    // Note: You may want to update user_metadata in Supabase here
+    // This would require updating the profile in the profiles table
+    
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Update failed';
+    return { ok: false, error: message };
+  }
 }
 
-export function updateCurrentUser(patch: Partial<Omit<User, "id" | "email" | "password">> & { name?: string; location?: string; avatarUrl?: string }) {
-  const cu = getCurrentUser();
-  if (!cu) return;
-  const users = readUsers();
-  const idx = users.findIndex(u => u.id === cu.id);
-  if (idx === -1) return;
+// Change password
+// Note: Currently not implemented - use Supabase password reset instead
+export async function changePassword(
+  oldPw: string, 
+  newPw: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const cachedUser = getCachedUser();
+    if (!cachedUser) return { ok: false, error: 'Not logged in' };
 
-  const updated: User = { ...cu, ...patch };
-  users[idx] = updated;
-  writeUsers(users);
-  setCurrentUser(updated);
-}
+    // Verify old password by trying to sign in
+    const { error: verifyError } = await authService.signIn(cachedUser.email, oldPw);
+    if (verifyError) {
+      return { ok: false, error: 'Current password is incorrect' };
+    }
 
-export function changePassword(oldPw: string, newPw: string): { ok: true } | { ok: false; error: string } {
-  const cu = getCurrentUser();
-  if (!cu) return { ok: false, error: "Not logged in" };
-  if (cu.password !== oldPw) return { ok: false, error: "Current password is incorrect" };
-
-  const users = readUsers();
-  const idx = users.findIndex(u => u.id === cu.id);
-  if (idx === -1) return { ok: false, error: "User not found" };
-
-  users[idx] = { ...users[idx], password: newPw };
-  writeUsers(users);
-  setCurrentUser(users[idx]);
-  return { ok: true };
+    // TODO: Implement password update using Supabase Auth
+    // await supabase.auth.updateUser({ password: newPw })
+    console.log('Password change requested for:', cachedUser.email, 'New password length:', newPw.length);
+    
+    return { ok: false, error: 'Password change not yet implemented. Please use Supabase password reset.' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Password change failed';
+    return { ok: false, error: message };
+  }
 }

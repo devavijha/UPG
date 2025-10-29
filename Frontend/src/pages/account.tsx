@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import {
-  getCurrentUser,
+  getCachedUser,
   updateCurrentUser,
   changePassword,
   logoutUser,
@@ -37,7 +37,7 @@ const AccountPage: React.FC = () => {
       navigate("/login");
       return;
     }
-    const cu = getCurrentUser();
+    const cu = getCachedUser();
     if (cu) {
       setName(cu.name || "");
       setLocation(cu.location || "");
@@ -54,7 +54,7 @@ const AccountPage: React.FC = () => {
   /* --------------- Password ---------------- */
   const resetPwErrors = () => setPwError(null);
 
-  const updatePw = () => {
+  const updatePw = async () => {
     resetPwErrors();
     if (!oldPw) {
       setPwError("Please enter your current password.");
@@ -73,7 +73,7 @@ const AccountPage: React.FC = () => {
       setPwError("Passwords do not match.");
       return;
     }
-    const res = changePassword(oldPw, newPw);
+    const res = await changePassword(oldPw, newPw);
     if (!res.ok) {
       setPwError(res.error || "Could not update password.");
       oldPwRef.current?.focus();
@@ -95,8 +95,8 @@ const AccountPage: React.FC = () => {
     newPw !== oldPw;
 
   /* ---------------- Logout ----------------- */
-  const logout = () => {
-    logoutUser();
+  const logout = async () => {
+    await logoutUser();
     toast.message("Signed out");
     navigate("/");
   };

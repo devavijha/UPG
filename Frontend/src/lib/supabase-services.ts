@@ -44,7 +44,7 @@ export const authService = {
   },
 
   // Listen to auth changes
-  onAuthStateChange(callback: (event: string, session: any) => void) {
+  onAuthStateChange(callback: (event: string, session: unknown) => void) {
     return supabase.auth.onAuthStateChange(callback)
   },
 }
@@ -90,7 +90,14 @@ export const productService = {
   },
 
   // Update product
-  async updateProduct(id: string, updates: any) {
+  async updateProduct(id: string, updates: Partial<{
+    title: string
+    description: string
+    price: number
+    category: string
+    condition: string
+    image_url: string
+  }>) {
     const { data, error } = await supabase
       .from('products')
       .update(updates)
@@ -125,7 +132,7 @@ export const productService = {
     const fileExt = file.name.split('.').pop()
     const fileName = `${userId}/${Math.random()}.${fileExt}`
     
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from('product-images')
       .upload(fileName, file)
 

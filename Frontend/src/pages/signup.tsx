@@ -16,20 +16,25 @@ const Signup: React.FC = () => {
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
-  const onSubmit: React.FormEventHandler<HTMLFormElement> = (e) => {
+  const onSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    setTimeout(() => {
-      const res = registerUser({ name, email, password });
-      setLoading(false);
+    try {
+      const res = await registerUser({ name, email, password });
+      
       if (!res.ok) {
         toast.error("Signup failed", { description: res.error });
+        setLoading(false);
         return;
       }
+      
       toast.success("Account created", { description: "Welcome to ReCraft!" });
       navigate("/");
-    }, 300);
+    } catch {
+      toast.error("Signup failed", { description: "An unexpected error occurred" });
+      setLoading(false);
+    }
   };
 
   return (
